@@ -3,6 +3,7 @@ services:
     name: website-backend
     plan: free
     branch: main
+    dockerfilePath: Dockerfile
     envVars:
       - key: NODE_ENV
         value: production
