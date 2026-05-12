@@ -14,15 +14,24 @@ app.use(express.json());
 app.use(express.static('.')); // Serve static files
 
 // Database connection
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-});
+let pool;
+if (process.env.DATABASE_URL) {
+  pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  });
 
-// Test database connection
-pool.on('connect', () => {
-  console.log('Connected to database');
-});
+  // Test database connection
+  pool.on('connect', () => {
+    console.log('Connected to database');
+  });
+
+  pool.on('error', (err) => {
+    console.error('Unexpected error on idle client', err);
+  });
+} else {
+  console.log('No DATABASE_URL provided - running without database');
+}
 
 // JWT middleware
 const authenticateToken = (req, res, next) => {
@@ -44,6 +53,9 @@ app.get('/api/health', (req, res) => {
 
 // API routes for users
 app.post('/api/users/register', async (req, res) => {
+  if (!pool) {
+    return res.status(503).json({ error: 'Database not available' });
+  }
   try {
     const { username, email, password } = req.body;
     if (!username || !email || !password) {
@@ -74,6 +86,9 @@ app.post('/api/users/register', async (req, res) => {
 });
 
 app.post('/api/users/login', async (req, res) => {
+  if (!pool) {
+    return res.status(503).json({ error: 'Database not available' });
+  }
   try {
     const { email, password } = req.body;
     if (!email || !password) {
@@ -110,6 +125,9 @@ app.post('/api/users/login', async (req, res) => {
 
 // API routes for posts/topics
 app.get('/api/topics', async (req, res) => {
+  if (!pool) {
+    return res.status(503).json({ error: 'Database not available' });
+  }
   try {
     const result = await pool.query(`
       SELECT t.*, u.username as author_username
@@ -125,6 +143,9 @@ app.get('/api/topics', async (req, res) => {
 });
 
 app.post('/api/topics', authenticateToken, async (req, res) => {
+  if (!pool) {
+    return res.status(503).json({ error: 'Database not available' });
+  }
   try {
     const { title, body, type } = req.body;
     if (!title || !body || !type) {
@@ -145,6 +166,9 @@ app.post('/api/topics', authenticateToken, async (req, res) => {
 
 // API routes for messages
 app.get('/api/messages', authenticateToken, async (req, res) => {
+  if (!pool) {
+    return res.status(503).json({ error: 'Database not available' });
+  }
   try {
     const result = await pool.query(`
       SELECT m.*, u.username as sender_username
@@ -161,6 +185,9 @@ app.get('/api/messages', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/messages', authenticateToken, async (req, res) => {
+  if (!pool) {
+    return res.status(503).json({ error: 'Database not available' });
+  }
   try {
     const { content, recipientId } = req.body;
     if (!content || !recipientId) {
