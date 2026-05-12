@@ -16,6 +16,10 @@ app.use(express.static('.')); // Serve static files
 // Database connection
 let pool;
 const databaseUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.PG_CONNECTION_STRING || process.env.DATABASE_URI;
+console.log('DATABASE_URL present:', !!process.env.DATABASE_URL);
+console.log('POSTGRES_URL present:', !!process.env.POSTGRES_URL);
+console.log('PG_CONNECTION_STRING present:', !!process.env.PG_CONNECTION_STRING);
+console.log('DATABASE_URI present:', !!process.env.DATABASE_URI);
 if (databaseUrl) {
   pool = new Pool({
     connectionString: databaseUrl,

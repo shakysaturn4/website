@@ -1,9 +1,11 @@
 services:
   - type: web
     name: website-backend
+    env: node
     plan: free
     branch: main
-    dockerfilePath: Dockerfile
+    buildCommand: npm install
+    startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
