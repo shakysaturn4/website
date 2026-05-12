@@ -44,24 +44,57 @@ document.addEventListener('DOMContentLoaded', function() {
         if (subtab) subtab.classList.add('active');
     }
 
-    function getUsers() {
-        return JSON.parse(localStorage.getItem('users')) || [];
-    }
+    // API helper functions
+    async function apiRequest(url, options = {}) {
+        const token = localStorage.getItem('authToken');
+        const headers = {
+            'Content-Type': 'application/json',
+            ...options.headers
+        };
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
 
-    function saveUsers(users) {
-        localStorage.setItem('users', JSON.stringify(users));
+        const response = await fetch(url, {
+            ...options,
+            headers
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ error: 'Network error' }));
+            throw new Error(error.error || `HTTP ${response.status}`);
+        }
+
+        return response.json();
     }
 
     function getCurrentUser() {
-        return JSON.parse(localStorage.getItem('currentUser'));
+        const token = localStorage.getItem('authToken');
+        const user = localStorage.getItem('currentUser');
+        if (token && user) {
+            try {
+                const userObj = JSON.parse(user);
+                // Check if token is still valid (basic check)
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                if (payload.exp * 1000 > Date.now()) {
+                    return userObj;
+                }
+            } catch (e) {
+                // Invalid token/user
+            }
+        }
+        clearCurrentUser();
+        return null;
     }
 
-    function setCurrentUser(user) {
+    function setCurrentUser(user, token) {
         localStorage.setItem('currentUser', JSON.stringify(user));
+        localStorage.setItem('authToken', token);
     }
 
     function clearCurrentUser() {
         localStorage.removeItem('currentUser');
+        localStorage.removeItem('authToken');
     }
 
     function isLoggedIn() {
@@ -279,29 +312,41 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     document.getElementById('close-auth').addEventListener('click', closeAuthPanel);
 
-    loginForm.addEventListener('submit', function(e) {
+    loginForm.addEventListener('submit', async function(e) {
         e.preventDefault();
-        const username = document.getElementById('login-username').value.trim();
+        const email = document.getElementById('login-email').value.trim();
         const password = document.getElementById('login-password').value;
-        const users = getUsers();
-        const user = users.find(entry => entry.username === username && entry.password === password);
 
-        if (!user) {
-            showAuthMessage('Invalid username or password.', 'error');
+        if (!email || !password) {
+            showAuthMessage('Please fill in all fields.', 'error');
             return;
         }
 
-        setCurrentUser({ username: user.username, role: user.role || 'user' });
-        showAuthMessage(`Welcome back, ${user.username}!`, 'success');
-        updateAccountUI();
+        try {
+            const response = await apiRequest('/api/users/login', {
+                method: 'POST',
+                body: JSON.stringify({ email, password })
+            });
+
+            setCurrentUser(response.user, response.token);
+            showAuthMessage(`Welcome back, ${response.user.username}!`, 'success');
+            updateAccountUI();
+        } catch (error) {
+            showAuthMessage(error.message, 'error');
+        }
     });
 
-    registerForm.addEventListener('submit', function(e) {
+    registerForm.addEventListener('submit', async function(e) {
         e.preventDefault();
         const username = document.getElementById('register-username').value.trim();
+        const email = document.getElementById('register-email').value.trim();
         const password = document.getElementById('register-password').value;
-        const adminCode = document.getElementById('register-code').value.trim();
         const confirmPassword = document.getElementById('register-confirm').value;
+
+        if (!username || !email || !password || !confirmPassword) {
+            showAuthMessage('Please fill in all fields.', 'error');
+            return;
+        }
 
         if (username.length < 3) {
             showAuthMessage('Username must be at least 3 characters.', 'error');
@@ -318,118 +363,114 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        const users = getUsers();
-        if (users.some(entry => entry.username === username)) {
-            showAuthMessage('This username is already taken.', 'error');
-            return;
-        }
+        try {
+            const response = await apiRequest('/api/users/register', {
+                method: 'POST',
+                body: JSON.stringify({ username, email, password })
+            });
 
-        const role = adminCode === 'letmein' ? 'admin' : 'user';
-        users.push({ username, password, role, createdAt: Date.now() });
-        saveUsers(users);
-        setCurrentUser({ username, role });
-        showAuthMessage(`Account created. Signed in as ${username}.`, 'success');
-        updateAccountUI();
+            setCurrentUser(response.user, response.token);
+            showAuthMessage(`Account created. Signed in as ${response.user.username}.`, 'success');
+            updateAccountUI();
+        } catch (error) {
+            showAuthMessage(error.message, 'error');
+        }
     });
 
-    function loadTopics() {
-        const topics = JSON.parse(localStorage.getItem('forumTopics')) || [];
-        topicsList.innerHTML = '';
+    async function loadTopics() {
+        try {
+            const topics = await apiRequest('/api/topics');
+            topicsList.innerHTML = '';
 
-        if (topics.length === 0) {
-            topicsList.innerHTML = '<p class="empty-state">No topics yet. Start the conversation by creating a topic.</p>';
-            return;
+            if (topics.length === 0) {
+                topicsList.innerHTML = '<p class="empty-state">No topics yet. Start the conversation by creating a topic.</p>';
+                return;
+            }
+
+            topics.forEach((topic) => {
+                const topicDiv = document.createElement('div');
+                topicDiv.className = 'forum-thread';
+                const typeLabel = topic.type === 'question' ? '<span class="topic-label question-label">Question</span>' : '<span class="topic-label discussion-label">Discussion</span>';
+                const replyDisabled = !isLoggedIn() ? 'disabled' : '';
+                const replyPlaceholder = isLoggedIn() ? 'Write a reply...' : 'Login to reply.';
+
+                const currentUser = getCurrentUser();
+                const isAuthor = currentUser && topic.author_username === currentUser.username;
+                const canDelete = currentUser && (isAuthor || currentUser.role === 'admin');
+                const topicActions = canDelete ? `
+                    <div class="profile-actions">
+                        ${isAuthor ? `<button class="action-button" type="button" onclick="editTopic(${topic.id})">Edit</button>` : ''}
+                        <button class="action-button danger" type="button" onclick="deleteTopic(${topic.id})">Delete</button>
+                    </div>
+                ` : '';
+
+                topicDiv.innerHTML = `
+                    <h3>${topic.title} ${typeLabel}</h3>
+                    <p>${topic.body}</p>
+                    <small>Posted by ${topic.author_username} on ${new Date(topic.created_at).toLocaleString()}</small>
+                    ${topicActions}
+                    <div class="replies">
+                        <p class="reply-count">Replies not implemented yet.</p>
+                    </div>
+                    <div class="reply-form">
+                        <textarea placeholder="${replyPlaceholder}" ${replyDisabled}></textarea>
+                        <button type="button" onclick="addReply(this, ${topic.id})" ${replyDisabled}>Submit Reply</button>
+                    </div>
+                `;
+                topicsList.appendChild(topicDiv);
+            });
+        } catch (error) {
+            console.error('Failed to load topics:', error);
+            topicsList.innerHTML = '<p class="empty-state">Failed to load topics. Please try again later.</p>';
         }
-
-        topics.forEach((topic, index) => {
-            const topicDiv = document.createElement('div');
-            topicDiv.className = 'forum-thread';
-            const typeLabel = topic.type === 'question' ? '<span class="topic-label question-label">Question</span>' : '<span class="topic-label discussion-label">Discussion</span>';
-            const replyDisabled = !isLoggedIn() ? 'disabled' : '';
-            const replyPlaceholder = isLoggedIn() ? 'Write a reply...' : 'Login to reply.';
-
-            const currentUser = getCurrentUser();
-            const isAuthor = currentUser && topic.author === currentUser.username;
-            const canDelete = currentUser && (isAuthor || currentUser.role === 'admin');
-            const topicActions = canDelete ? `
-                <div class="profile-actions">
-                    ${isAuthor ? `<button class="action-button" type="button" onclick="editTopic(${index})">Edit</button>` : ''}
-                    <button class="action-button danger" type="button" onclick="deleteTopic(${index})">Delete</button>
-                </div>
-            ` : '';
-
-            topicDiv.innerHTML = `
-                <h3>${topic.title} ${typeLabel}</h3>
-                <p>${topic.body}</p>
-                <small>Posted by ${topic.author} on ${new Date(topic.timestamp).toLocaleString()}</small>
-                ${topicActions}
-                <div class="replies">
-                    ${topic.replies.length > 0 ? `<p class="reply-count">${topic.replies.length} repl${topic.replies.length === 1 ? 'y' : 'ies'}</p>` : '<p class="reply-count">No replies yet.</p>'}
-                    ${topic.replies.map(reply => `
-                        <div class="answer-item">
-                            <p>${reply.body}</p>
-                            <small>Replied by ${reply.author} on ${new Date(reply.timestamp).toLocaleString()}</small>
-                        </div>
-                    `).join('')}
-                </div>
-                <div class="reply-form">
-                    <textarea placeholder="${replyPlaceholder}" ${replyDisabled}></textarea>
-                    <button type="button" onclick="addReply(this, ${index})" ${replyDisabled}>Submit Reply</button>
-                </div>
-            `;
-            topicsList.appendChild(topicDiv);
-        });
     }
 
-    function loadQuestionTopics() {
-        const topics = JSON.parse(localStorage.getItem('forumTopics')) || [];
-        questionsList.innerHTML = '';
-        const questionTopics = topics
-            .map((topic, index) => ({ topic, index }))
-            .filter(entry => entry.topic.type === 'question');
+    async function loadQuestionTopics() {
+        try {
+            const topics = await apiRequest('/api/topics');
+            questionsList.innerHTML = '';
+            const questionTopics = topics.filter(topic => topic.type === 'question');
 
-        if (questionTopics.length === 0) {
-            questionsList.innerHTML = '<p class="empty-state">No questions yet. Post a question and other users can reply.</p>';
-            return;
+            if (questionTopics.length === 0) {
+                questionsList.innerHTML = '<p class="empty-state">No questions yet. Post a question and other users can reply.</p>';
+                return;
+            }
+
+            questionTopics.forEach((topic) => {
+                const topicDiv = document.createElement('div');
+                topicDiv.className = 'qa-item';
+                const replyDisabled = !isLoggedIn() ? 'disabled' : '';
+                const replyPlaceholder = isLoggedIn() ? 'Write a reply...' : 'Login to reply.';
+
+                const currentUser = getCurrentUser();
+                const isAuthor = currentUser && topic.author_username === currentUser.username;
+                const canDelete = currentUser && (isAuthor || currentUser.role === 'admin');
+                const topicActions = canDelete ? `
+                    <div class="profile-actions">
+                        ${isAuthor ? `<button class="action-button" type="button" onclick="editTopic(${topic.id})">Edit</button>` : ''}
+                        <button class="action-button danger" type="button" onclick="deleteTopic(${topic.id})">Delete</button>
+                    </div>
+                ` : '';
+
+                topicDiv.innerHTML = `
+                    <h3>${topic.title} <span class="topic-label question-label">Question</span></h3>
+                    <p>${topic.body}</p>
+                    <small>Asked by ${topic.author_username} on ${new Date(topic.created_at).toLocaleString()}</small>
+                    ${topicActions}
+                    <div class="replies">
+                        <p class="reply-count">Answers not implemented yet.</p>
+                    </div>
+                    <div class="reply-form">
+                        <textarea placeholder="${replyPlaceholder}" ${replyDisabled}></textarea>
+                        <button type="button" onclick="addReply(this, ${topic.id})" ${replyDisabled}>Submit Reply</button>
+                    </div>
+                `;
+                questionsList.appendChild(topicDiv);
+            });
+        } catch (error) {
+            console.error('Failed to load questions:', error);
+            questionsList.innerHTML = '<p class="empty-state">Failed to load questions. Please try again later.</p>';
         }
-
-        questionTopics.forEach(({ topic, index }) => {
-            const topicDiv = document.createElement('div');
-            topicDiv.className = 'qa-item';
-            const replyDisabled = !isLoggedIn() ? 'disabled' : '';
-            const replyPlaceholder = isLoggedIn() ? 'Write a reply...' : 'Login to reply.';
-
-            const currentUser = getCurrentUser();
-            const isAuthor = currentUser && topic.author === currentUser.username;
-            const canDelete = currentUser && (isAuthor || currentUser.role === 'admin');
-            const topicActions = canDelete ? `
-                <div class="profile-actions">
-                    ${isAuthor ? `<button class="action-button" type="button" onclick="editTopic(${index})">Edit</button>` : ''}
-                    <button class="action-button danger" type="button" onclick="deleteTopic(${index})">Delete</button>
-                </div>
-            ` : '';
-
-            topicDiv.innerHTML = `
-                <h3>${topic.title} <span class="topic-label question-label">Question</span></h3>
-                <p>${topic.body}</p>
-                <small>Asked by ${topic.author} on ${new Date(topic.timestamp).toLocaleString()}</small>
-                ${topicActions}
-                <div class="replies">
-                    ${topic.replies.length > 0 ? `<p class="reply-count">${topic.replies.length} repl${topic.replies.length === 1 ? 'y' : 'ies'}</p>` : '<p class="reply-count">No answers yet.</p>'}
-                    ${topic.replies.map(reply => `
-                        <div class="answer-item">
-                            <p>${reply.body}</p>
-                            <small>Answered by ${reply.author} on ${new Date(reply.timestamp).toLocaleString()}</small>
-                        </div>
-                    `).join('')}
-                </div>
-                <div class="reply-form">
-                    <textarea placeholder="${replyPlaceholder}" ${replyDisabled}></textarea>
-                    <button type="button" onclick="addReply(this, ${index})" ${replyDisabled}>Submit Reply</button>
-                </div>
-            `;
-            questionsList.appendChild(topicDiv);
-        });
     }
 
     function loadGalleryItems() {
@@ -465,7 +506,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    topicForm.addEventListener('submit', function(e) {
+    topicForm.addEventListener('submit', async function(e) {
         e.preventDefault();
         if (!isLoggedIn()) {
             alert('Please login before creating a topic.');
@@ -477,23 +518,19 @@ document.addEventListener('DOMContentLoaded', function() {
         const type = document.getElementById('topic-type').value;
         if (!title || !body) return;
 
-        const user = getCurrentUser();
-        const topics = JSON.parse(localStorage.getItem('forumTopics')) || [];
-        topics.unshift({
-            title,
-            body,
-            type,
-            author: user.username,
-            timestamp: Date.now(),
-            replies: []
-        });
+        try {
+            await apiRequest('/api/topics', {
+                method: 'POST',
+                body: JSON.stringify({ title, body, type })
+            });
 
-        localStorage.setItem('forumTopics', JSON.stringify(topics));
-        topicForm.reset();
-        loadTopics();
-        loadQuestionTopics();
-        switchTab('forums');
-        switchSubtab('forum-topics');
+            topicForm.reset();
+            loadTopics();
+            switchTab('forums');
+            switchSubtab('forum-topics');
+        } catch (error) {
+            alert('Failed to create topic: ' + error.message);
+        }
     });
 
     galleryForm.addEventListener('submit', function(e) {
@@ -523,7 +560,7 @@ document.addEventListener('DOMContentLoaded', function() {
         loadGalleryItems();
     });
 
-    questionForm.addEventListener('submit', function(e) {
+    questionForm.addEventListener('submit', async function(e) {
         e.preventDefault();
         if (!isLoggedIn()) {
             alert('Please login before asking a question.');
@@ -534,22 +571,19 @@ document.addEventListener('DOMContentLoaded', function() {
         const body = document.getElementById('question-body').value.trim();
         if (!title || !body) return;
 
-        const user = getCurrentUser();
-        const topics = JSON.parse(localStorage.getItem('forumTopics')) || [];
-        topics.unshift({
-            title,
-            body,
-            type: 'question',
-            author: user.username,
-            timestamp: Date.now(),
-            replies: []
-        });
+        try {
+            await apiRequest('/api/topics', {
+                method: 'POST',
+                body: JSON.stringify({ title, body, type: 'question' })
+            });
 
-        localStorage.setItem('forumTopics', JSON.stringify(topics));
-        questionForm.reset();
-        loadTopics();
-        loadQuestionTopics();
-        switchTab('qa');
+            questionForm.reset();
+            loadTopics();
+            loadQuestionTopics();
+            switchTab('qa');
+        } catch (error) {
+            alert('Failed to ask question: ' + error.message);
+        }
     });
 
     window.addReply = function(button, index) {
@@ -653,4 +687,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     updateAccountUI();
+    loadTopics();
+    loadQuestionTopics();
+    // loadGalleryItems(); // TODO: implement gallery API
 });
