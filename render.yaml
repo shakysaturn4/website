@@ -11,6 +11,14 @@ services:
         fromDatabase:
           name: website-db
           property: connectionString
+      - key: POSTGRES_URL
+        fromDatabase:
+          name: website-db
+          property: connectionString
+      - key: PG_CONNECTION_STRING
+        fromDatabase:
+          name: website-db
+          property: connectionString
       - key: JWT_SECRET
         value: dbe0a8bbe3f86177fec6b5b188ba6fb7f83c5efa8419c4a6ed2bac99e13b138b
 

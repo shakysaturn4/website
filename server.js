@@ -15,13 +15,14 @@ app.use(express.static('.')); // Serve static files
 
 // Database connection
 let pool;
-if (process.env.DATABASE_URL) {
+const databaseUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.PG_CONNECTION_STRING || process.env.DATABASE_URI;
+if (databaseUrl) {
   pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
+    connectionString: databaseUrl,
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
   });
 
-  // Test database connection
+  console.log('Database URL found: yes');
   pool.on('connect', () => {
     console.log('Connected to database');
   });
@@ -30,7 +31,8 @@ if (process.env.DATABASE_URL) {
     console.error('Unexpected error on idle client', err);
   });
 } else {
-  console.log('No DATABASE_URL provided - running without database');
+  console.log('Database URL found: no');
+  console.log('Running without database. Expected env vars: DATABASE_URL, POSTGRES_URL, PG_CONNECTION_STRING, or DATABASE_URI.');
 }
 
 // JWT middleware
