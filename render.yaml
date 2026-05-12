@@ -1,0 +1,25 @@
+services:
+  # Backend API (Node.js)
+  - type: web
+    name: backend-api
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: app-db
+          property: connectionString
+      - key: NODE_ENV
+        value: production
+
+  # Frontend (HTML / CSS / JS)
+  - type: web
+    name: frontend
+    runtime: static
+    staticPublishPath: public
+
+databases:
+  - name: app-db
+    plan: free

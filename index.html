@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nostalgic Tech Hub</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>Nostalgic Tech Hub</h1>
+        <nav>
+            <button class="tab-button active" data-tab="forums">Forums</button>
+            <button class="tab-button" data-tab="gallery">Gallery</button>
+            <button class="tab-button" data-tab="qa">Q&A</button>
+            <button class="tab-button" data-tab="profile">Profile</button>
+        </nav>
+        <div class="account-banner">
+            <div class="account-state" id="account-state">
+                <strong>Not signed in.</strong> Please login or register to post.
+            </div>
+            <div class="account-actions">
+                <button type="button" id="open-login" class="account-button">Login</button>
+                <button type="button" id="open-register" class="account-button">Register</button>
+                <button type="button" id="logout-button" class="account-button hidden">Logout</button>
+            </div>
+        </div>
+    </header>
+    <main>
+        <div id="forums" class="tab-content active">
+            <div class="forum-header">
+                <div>
+                    <h2>Forums</h2>
+                    <p class="forum-description">Create discussion topics, reply to posts, and follow the forum rules.</p>
+                </div>
+                <div class="forum-subnav">
+                    <button type="button" class="subtab-button active" data-subtab="forum-topics">Topics</button>
+                    <button type="button" class="subtab-button" data-subtab="forum-rules">Rules</button>
+                </div>
+            </div>
+            <div id="forum-topics" class="forum-subtab active">
+                <div class="forum-controls">
+                    <h3>Create a new topic</h3>
+                    <form id="topic-form">
+                        <input type="text" id="topic-title" placeholder="Topic title" required>
+                        <textarea id="topic-body" placeholder="Describe the topic or question here..." required></textarea>
+                        <select id="topic-type" required>
+                            <option value="discussion">Discussion</option>
+                            <option value="question">Question</option>
+                        </select>
+                        <button type="submit">Create Topic</button>
+                    </form>
+                    <p class="login-note">Login to post topics, reply, or add gallery items.</p>
+                </div>
+                <div id="topics-list">
+                    <p class="empty-state">No topics yet. Start the conversation by creating a topic.</p>
+                </div>
+            </div>
+            <div id="forum-rules" class="forum-subtab">
+                <h3>Forum Rules</h3>
+                <ul class="rules-list">
+                    <li>Keep all posts civil and respectful.</li>
+                    <li>No hate speech, harassment, or threats.</li>
+                    <li>No spam, advertising, or unrelated promotions.</li>
+                    <li>No illegal content or instructions for wrongdoing.</li>
+                    <li>No explicit adult material.</li>
+                    <li>Keep personal information private and do not share others' data.</li>
+                    <li>Stay on-topic for each discussion thread.</li>
+                    <li>Use clear titles and content so others can participate.</li>
+                    <li>Report abusive posts instead of engaging.</li>
+                </ul>
+            </div>
+        </div>
+        <div id="gallery" class="tab-content">
+            <h2>Gallery</h2>
+            <div class="gallery-controls">
+                <h3>Share a gallery item</h3>
+                <form id="gallery-form">
+                    <input type="text" id="gallery-title" placeholder="Item title" required>
+                    <input type="url" id="gallery-image" placeholder="Image URL" required>
+                    <textarea id="gallery-description" placeholder="Describe the item or media..." required></textarea>
+                    <button type="submit">Add Gallery Item</button>
+                </form>
+            </div>
+            <div id="gallery-items" class="gallery-grid">
+                <p class="empty-state">No gallery items yet. Share screenshots or media in the gallery.</p>
+            </div>
+        </div>
+        <div id="qa" class="tab-content">
+            <h2>Ask & Answer</h2>
+            <div class="qa-controls">
+                <h3>Ask a question</h3>
+                <form id="question-form">
+                    <input type="text" id="question-title" placeholder="Question title" required>
+                    <textarea id="question-body" placeholder="Describe your question here..." required></textarea>
+                    <button type="submit">Ask Question</button>
+                </form>
+                <p class="login-note">Login to ask a question or reply to questions.</p>
+            </div>
+            <div id="questions-list">
+                <p class="empty-state">No questions yet. Post a question and other users can reply.</p>
+            </div>
+        </div>
+        <div id="profile" class="tab-content">
+            <h2>My Profile</h2>
+            <div class="profile-summary" id="profile-summary">
+                <p class="empty-state">Sign in to view your profile and manage your content.</p>
+            </div>
+            <div class="profile-panel">
+                <div class="profile-section">
+                    <h3>My Topics</h3>
+                    <div id="profile-topics" class="profile-list">
+                        <p class="empty-state">No topics yet. Your created topics will appear here.</p>
+                    </div>
+                </div>
+                <div class="profile-section">
+                    <h3>My Questions</h3>
+                    <div id="profile-questions" class="profile-list">
+                        <p class="empty-state">No questions yet. Your asked questions will appear here.</p>
+                    </div>
+                </div>
+                <div class="profile-section">
+                    <h3>My Gallery Items</h3>
+                    <div id="profile-gallery" class="profile-list">
+                        <p class="empty-state">No gallery items yet. Your shared gallery entries will appear here.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+    <div id="auth-panel" class="auth-panel hidden">
+        <div class="auth-card">
+            <div class="auth-tabs">
+                <button type="button" class="auth-tab active" data-auth="login">Login</button>
+                <button type="button" class="auth-tab" data-auth="register">Register</button>
+            </div>
+            <div id="login-panel" class="auth-form active">
+                <form id="login-form">
+                    <label for="login-username">Username</label>
+                    <input type="text" id="login-username" placeholder="Username" required>
+                    <label for="login-password">Password</label>
+                    <input type="password" id="login-password" placeholder="Password" required>
+                    <button type="submit">Sign In</button>
+                </form>
+            </div>
+            <div id="register-panel" class="auth-form">
+                <form id="register-form">
+                    <label for="register-username">Username</label>
+                    <input type="text" id="register-username" placeholder="Choose a username" required>
+                    <label for="register-password">Password</label>
+                    <input type="password" id="register-password" placeholder="Choose a password" required>
+                    <label for="register-code">Admin code (optional)</label>
+                    <input type="password" id="register-code" placeholder="Enter admin code to create an admin account">
+                    <label for="register-confirm">Confirm Password</label>
+                    <input type="password" id="register-confirm" placeholder="Repeat your password" required>
+                    <button type="submit">Create Account</button>
+                </form>
+            </div>
+            <p class="auth-message" id="auth-message"></p>
+            <button type="button" id="close-auth" class="close-auth">Close</button>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
