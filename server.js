@@ -1,47 +1,69 @@
+// ===== DEPENDENCIES & IMPORTS =====
+// Express: Web framework for building the API
 const express = require('express');
+// CORS: Allows requests from different domains
 const cors = require('cors');
+// bcryptjs: For hashing passwords securely
 const bcrypt = require('bcryptjs');
+// jsonwebtoken: For creating and verifying JWT authentication tokens
 const jwt = require('jsonwebtoken');
+// dotenv: Loads environment variables from .env file
 require('dotenv').config();
 
+// ===== SERVER SETUP =====
 const app = express();
+// Get port from environment or use default 3000
 const port = process.env.PORT || 3000;
+// Secret key for signing JWT tokens
 const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-key';
 
-// In-memory storage
-let users = [];
-let topics = [];
-let messages = [];
-let nextUserId = 1;
-let nextTopicId = 1;
-let nextMessageId = 1;
+// ===== IN-MEMORY DATA STORAGE =====
+// Note: Data is not persistent - it resets when server restarts
+// In production, you would use a database like PostgreSQL
+let users = [];        // Stores user accounts
+let topics = [];       // Stores forum topics/discussions/questions
+let messages = [];     // Stores private messages between users
+let nextUserId = 1;    // Counter for generating unique user IDs
+let nextTopicId = 1;   // Counter for generating unique topic IDs
+let nextMessageId = 1; // Counter for generating unique message IDs
 
-// Middleware
+// ===== MIDDLEWARE SETUP =====
+// Enable CORS to allow requests from different origins
 app.use(cors());
+// Parse incoming JSON request bodies
 app.use(express.json());
-app.use(express.static('.')); // Serve static files
+// Serve static files (HTML, CSS, JS, etc.) from the current directory
+app.use(express.static('.'));
 
 console.log('🚀 Server starting with in-memory storage...');
 
-// JWT middleware
+// ===== JWT AUTHENTICATION MIDDLEWARE =====
+// This middleware checks if requests have a valid JWT token
+// If valid, it adds the user data to req.user
+// If invalid, it returns an error
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
+  // Extract token from "Bearer <token>" format
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'Access token required' });
 
+  // Verify token signature and expiration
   jwt.verify(token, jwtSecret, (err, user) => {
     if (err) return res.status(403).json({ error: 'Invalid token' });
-    req.user = user;
+    req.user = user;  // Attach user data to request for use in route handlers
     next();
   });
 };
 
-// Basic routes
+// ===== HEALTH CHECK ENDPOINT =====
+// Simple endpoint to verify the server is running
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Server is running' });
 });
 
-// API routes for users
+// ===== USER REGISTRATION ENDPOINT =====
+// POST /api/users/register
+// Creates a new user account with username, email, and password
 app.post('/api/users/register', async (req, res) => {
   try {
     const { username, email, password } = req.body;
@@ -49,27 +71,32 @@ app.post('/api/users/register', async (req, res) => {
       return res.status(400).json({ error: 'Username, email, and password are required' });
     }
 
-    // Check if user already exists
+    // Check if username or email already exists
     const existingUser = users.find(u => u.email === email || u.username === username);
     if (existingUser) {
       return res.status(400).json({ error: 'User already exists' });
     }
 
-    // Hash password
+    // Hash password using bcryptjs (10 salt rounds for security)
     const saltRounds = 10;
     const passwordHash = await bcrypt.hash(password, saltRounds);
 
-    // Create user
+    // Create new user object with profile fields
     const user = {
       id: nextUserId++,
       username,
       email,
       password_hash: passwordHash,
+      profile_pic: null,        // URL to user's profile picture
+      media: [],                // Array of media URLs for user's profile
+      description: '',          // Short description
+      bio: '',                  // Longer biographical text
       created_at: new Date().toISOString()
     };
 
     users.push(user);
 
+    // Create JWT token that expires in 24 hours
     const token = jwt.sign(
       { id: user.id, username: user.username, email: user.email },
       jwtSecret,
@@ -87,6 +114,9 @@ app.post('/api/users/register', async (req, res) => {
   }
 });
 
+// ===== USER LOGIN ENDPOINT =====
+// POST /api/users/login
+// Authenticates user with email and password, returns JWT token
 app.post('/api/users/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -94,19 +124,19 @@ app.post('/api/users/login', async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    // Find user
+    // Find user by email
     const user = users.find(u => u.email === email);
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Check password
+    // Compare provided password with stored hash
     const isValidPassword = await bcrypt.compare(password, user.password_hash);
     if (!isValidPassword) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Generate JWT
+    // Create JWT token
     const token = jwt.sign(
       { id: user.id, username: user.username, email: user.email },
       process.env.JWT_SECRET || 'fallback-secret-key',
@@ -124,15 +154,26 @@ app.post('/api/users/login', async (req, res) => {
   }
 });
 
-// API routes for posts/topics
+// ===== TOPICS/DISCUSSIONS ENDPOINTS =====
+// GET /api/topics
+// Retrieves all forum topics with author information and replies
 app.get('/api/topics', async (req, res) => {
   try {
-    // Return topics with author information
+    // Map topics to include author's username instead of just ID
     const topicsWithAuthors = topics.map(topic => {
       const author = users.find(u => u.id === topic.author_id);
+      // Also map replies to include reply author usernames
+      const repliesWithAuthors = topic.replies.map(reply => {
+        const replyAuthor = users.find(u => u.id === reply.author_id);
+        return {
+          ...reply,
+          author_username: replyAuthor ? replyAuthor.username : 'Unknown'
+        };
+      });
       return {
         ...topic,
-        author_username: author ? author.username : 'Unknown'
+        author_username: author ? author.username : 'Unknown',
+        replies: repliesWithAuthors
       };
     }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
@@ -143,6 +184,8 @@ app.get('/api/topics', async (req, res) => {
   }
 });
 
+// POST /api/topics
+// Creates a new topic (requires authentication)
 app.post('/api/topics', authenticateToken, async (req, res) => {
   try {
     const { title, body, type } = req.body;
@@ -156,6 +199,7 @@ app.post('/api/topics', authenticateToken, async (req, res) => {
       body,
       type,
       author_id: req.user.id,
+      replies: [], // Initialize empty replies array
       created_at: new Date().toISOString()
     };
 
@@ -164,6 +208,88 @@ app.post('/api/topics', authenticateToken, async (req, res) => {
     res.status(201).json({ message: 'Topic created successfully', topic });
   } catch (error) {
     console.error('Create topic error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/topics/:id/replies
+// Adds a reply to a topic (requires authentication)
+app.post('/api/topics/:id/replies', authenticateToken, async (req, res) => {
+  try {
+    const topicId = parseInt(req.params.id);
+    const { body } = req.body;
+    if (!body) {
+      return res.status(400).json({ error: 'Reply body is required' });
+    }
+
+    const topic = topics.find(t => t.id === topicId);
+    if (!topic) {
+      return res.status(404).json({ error: 'Topic not found' });
+    }
+
+    const reply = {
+      id: nextMessageId++, // Reuse message ID counter for simplicity
+      body,
+      author_id: req.user.id,
+      created_at: new Date().toISOString()
+    };
+
+    topic.replies.push(reply);
+
+    res.status(201).json({ message: 'Reply added successfully', reply });
+  } catch (error) {
+    console.error('Add reply error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /api/topics/:id
+// Updates a topic (requires authentication, only author can edit)
+app.put('/api/topics/:id', authenticateToken, async (req, res) => {
+  try {
+    const topicId = parseInt(req.params.id);
+    const { title, body, type } = req.body;
+
+    const topic = topics.find(t => t.id === topicId);
+    if (!topic) {
+      return res.status(404).json({ error: 'Topic not found' });
+    }
+
+    if (topic.author_id !== req.user.id) {
+      return res.status(403).json({ error: 'You can only edit your own topics' });
+    }
+
+    if (title) topic.title = title;
+    if (body) topic.body = body;
+    if (type) topic.type = type;
+
+    res.json({ message: 'Topic updated successfully', topic });
+  } catch (error) {
+    console.error('Update topic error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /api/topics/:id
+// Deletes a topic (requires authentication, only author can delete)
+app.delete('/api/topics/:id', authenticateToken, async (req, res) => {
+  try {
+    const topicId = parseInt(req.params.id);
+    const topicIndex = topics.findIndex(t => t.id === topicId);
+    if (topicIndex === -1) {
+      return res.status(404).json({ error: 'Topic not found' });
+    }
+
+    const topic = topics[topicIndex];
+    if (topic.author_id !== req.user.id) {
+      return res.status(403).json({ error: 'You can only delete your own topics' });
+    }
+
+    topics.splice(topicIndex, 1);
+
+    res.json({ message: 'Topic deleted successfully' });
+  } catch (error) {
+    console.error('Delete topic error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -225,6 +351,6 @@ app.get('*', (req, res) => {
   res.sendFile(__dirname + '/index.html');
 });
 
-app.listen(port, () => {
+app.listen(port, '0.0.0.0', () => {
   console.log(`Server running on port ${port}`);
 });

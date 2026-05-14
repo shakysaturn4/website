@@ -4,17 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nostalgic Tech Hub</title>
+    <!-- Link to main stylesheet -->
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- ===== HEADER SECTION ===== -->
+    <!-- Contains site title, navigation, and user account controls -->
     <header>
         <h1>Nostalgic Tech Hub</h1>
+        
+        <!-- Navigation buttons to switch between main sections -->
         <nav>
             <button class="tab-button active" data-tab="forums">Forums</button>
             <button class="tab-button" data-tab="gallery">Gallery</button>
             <button class="tab-button" data-tab="qa">Q&A</button>
             <button class="tab-button" data-tab="profile">Profile</button>
         </nav>
+        
+        <!-- Account status and login/logout buttons -->
         <div class="account-banner">
             <div class="account-state" id="account-state">
                 <strong>Not signed in.</strong> Please login or register to post.
@@ -26,21 +33,29 @@
             </div>
         </div>
     </header>
+    
+    <!-- ===== MAIN CONTENT AREA ===== -->
+    <!-- Contains the tab content sections (Forums, Gallery, Q&A, Profile) -->
     <main>
+        <!-- ===== FORUMS TAB ===== -->
         <div id="forums" class="tab-content active">
             <div class="forum-header">
                 <div>
                     <h2>Forums</h2>
                     <p class="forum-description">Create discussion topics, reply to posts, and follow the forum rules.</p>
                 </div>
+                <!-- Sub-navigation to switch between Topics and Rules -->
                 <div class="forum-subnav">
                     <button type="button" class="subtab-button active" data-subtab="forum-topics">Topics</button>
                     <button type="button" class="subtab-button" data-subtab="forum-rules">Rules</button>
                 </div>
             </div>
+            
+            <!-- Topics sub-section: Create and view topics -->
             <div id="forum-topics" class="forum-subtab active">
                 <div class="forum-controls">
                     <h3>Create a new topic</h3>
+                    <!-- Form to create a new forum topic -->
                     <form id="topic-form">
                         <input type="text" id="topic-title" placeholder="Topic title" required>
                         <textarea id="topic-body" placeholder="Describe the topic or question here..." required></textarea>
@@ -52,10 +67,13 @@
                     </form>
                     <p class="login-note">Login to post topics, reply, or add gallery items.</p>
                 </div>
+                <!-- Container where forum topics are dynamically loaded -->
                 <div id="topics-list">
                     <p class="empty-state">No topics yet. Start the conversation by creating a topic.</p>
                 </div>
             </div>
+            
+            <!-- Rules sub-section: Display forum rules -->
             <div id="forum-rules" class="forum-subtab">
                 <h3>Forum Rules</h3>
                 <ul class="rules-list">
@@ -71,10 +89,14 @@
                 </ul>
             </div>
         </div>
+        
+        <!-- ===== GALLERY TAB ===== -->
+        <!-- Users can share screenshots and media here -->
         <div id="gallery" class="tab-content">
             <h2>Gallery</h2>
             <div class="gallery-controls">
                 <h3>Share a gallery item</h3>
+                <!-- Form to add a new gallery item -->
                 <form id="gallery-form">
                     <input type="text" id="gallery-title" placeholder="Item title" required>
                     <input type="url" id="gallery-image" placeholder="Image URL" required>
@@ -82,14 +104,19 @@
                     <button type="submit">Add Gallery Item</button>
                 </form>
             </div>
+            <!-- Container where gallery items are dynamically loaded -->
             <div id="gallery-items" class="gallery-grid">
                 <p class="empty-state">No gallery items yet. Share screenshots or media in the gallery.</p>
             </div>
         </div>
+        
+        <!-- ===== Q&A TAB ===== -->
+        <!-- Question and answer section for technical questions -->
         <div id="qa" class="tab-content">
             <h2>Ask & Answer</h2>
             <div class="qa-controls">
                 <h3>Ask a question</h3>
+                <!-- Form to ask a new question -->
                 <form id="question-form">
                     <input type="text" id="question-title" placeholder="Question title" required>
                     <textarea id="question-body" placeholder="Describe your question here..." required></textarea>
@@ -97,6 +124,7 @@
                 </form>
                 <p class="login-note">Login to ask a question or reply to questions.</p>
             </div>
+            <!-- Container where questions are dynamically loaded -->
             <div id="questions-list">
                 <p class="empty-state">No questions yet. Post a question and other users can reply.</p>
             </div>

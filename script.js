@@ -1,7 +1,12 @@
+// Wait for the DOM to load before executing JavaScript
 document.addEventListener('DOMContentLoaded', function() {
+    // ===== DOM Element References =====
+    // Get references to all navigation buttons
     const tabButtons = document.querySelectorAll('.tab-button');
     const tabContents = document.querySelectorAll('.tab-content');
     const subTabButtons = document.querySelectorAll('.subtab-button');
+    
+    // Get references to authentication modal elements
     const authPanel = document.getElementById('auth-panel');
     const accountState = document.getElementById('account-state');
     const openLogin = document.getElementById('open-login');
@@ -11,20 +16,30 @@ document.addEventListener('DOMContentLoaded', function() {
     const loginForm = document.getElementById('login-form');
     const registerForm = document.getElementById('register-form');
     const authMessage = document.getElementById('auth-message');
+    
+    // Focus management for accessibility
     let focusableAuthElements = [];
     let firstAuthFocusable = null;
     let lastAuthFocusable = null;
+    
+    // Get references to form elements for creating content
     const topicForm = document.getElementById('topic-form');
     const galleryForm = document.getElementById('gallery-form');
     const questionForm = document.getElementById('question-form');
+    
+    // Get references to content display areas
     const topicsList = document.getElementById('topics-list');
     const galleryItems = document.getElementById('gallery-items');
     const questionsList = document.getElementById('questions-list');
+    
+    // Get references to profile elements
     const profileSummary = document.getElementById('profile-summary');
     const profileTopicsList = document.getElementById('profile-topics');
     const profileQuestionsList = document.getElementById('profile-questions');
     const profileGalleryList = document.getElementById('profile-gallery');
 
+    // ===== Tab Navigation Functions =====
+    // Switch between main tabs (Forums, Gallery, Q&A, Profile)
     function switchTab(tabId) {
         tabButtons.forEach(btn => btn.classList.remove('active'));
         tabContents.forEach(content => content.classList.remove('active'));
@@ -34,6 +49,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (tab) tab.classList.add('active');
     }
 
+    // Switch between sub-tabs within Forums (Topics vs Rules)
     function switchSubtab(subtabId) {
         subTabButtons.forEach(btn => btn.classList.remove('active'));
         const subtabs = document.querySelectorAll('.forum-subtab');
@@ -44,7 +60,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (subtab) subtab.classList.add('active');
     }
 
-    // API helper functions
+    // ===== API Helper Functions =====
+    // Make authenticated API requests to the server
+    // Includes JWT token in Authorization header if user is logged in
     async function apiRequest(url, options = {}) {
         const token = localStorage.getItem('authToken');
         const headers = {
@@ -68,35 +86,41 @@ document.addEventListener('DOMContentLoaded', function() {
         return response.json();
     }
 
+    // ===== User Authentication & Session Management =====
+    // Get current logged-in user from localStorage
+    // Also validates the JWT token to ensure it hasn't expired
     function getCurrentUser() {
         const token = localStorage.getItem('authToken');
         const user = localStorage.getItem('currentUser');
         if (token && user) {
             try {
                 const userObj = JSON.parse(user);
-                // Check if token is still valid (basic check)
+                // Decode JWT payload to check expiration time
                 const payload = JSON.parse(atob(token.split('.')[1]));
                 if (payload.exp * 1000 > Date.now()) {
                     return userObj;
                 }
             } catch (e) {
-                // Invalid token/user
+                // Invalid token/user - clear it
             }
         }
         clearCurrentUser();
         return null;
     }
 
+    // Store user and token in localStorage when they log in
     function setCurrentUser(user, token) {
         localStorage.setItem('currentUser', JSON.stringify(user));
         localStorage.setItem('authToken', token);
     }
 
+    // Remove user and token from localStorage when they log out
     function clearCurrentUser() {
         localStorage.removeItem('currentUser');
         localStorage.removeItem('authToken');
     }
 
+    // Check if a user is currently logged in
     function isLoggedIn() {
         return !!getCurrentUser();
     }
@@ -138,11 +162,11 @@ document.addEventListener('DOMContentLoaded', function() {
         renderCurrentLists();
     }
 
-    function renderCurrentLists() {
-        loadTopics();
-        loadQuestionTopics();
+    async function renderCurrentLists() {
+        await loadTopics();
+        await loadQuestionTopics();
         loadGalleryItems();
-        loadProfileData();
+        await loadProfileData();
     }
 
     function showAuthMessage(message, type = 'info') {
@@ -150,7 +174,7 @@ document.addEventListener('DOMContentLoaded', function() {
         authMessage.className = `auth-message ${type}`;
     }
 
-    function loadProfileData() {
+    async function loadProfileData() {
         const user = getCurrentUser();
         if (!profileSummary) return;
 
@@ -162,10 +186,10 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        const topics = JSON.parse(localStorage.getItem('forumTopics')) || [];
+        const topics = await apiRequest('/api/topics');
         const gallery = JSON.parse(localStorage.getItem('galleryItems')) || [];
-        const userTopics = topics.map((topic, index) => ({ topic, index })).filter(entry => entry.topic.author === user.username);
-        const userQuestions = userTopics.filter(entry => entry.topic.type === 'question');
+        const userTopics = topics.filter(topic => topic.author_username === user.username);
+        const userQuestions = userTopics.filter(topic => topic.type === 'question');
         const userGallery = gallery.map((item, index) => ({ item, index })).filter(entry => entry.item.author === user.username);
 
         profileSummary.innerHTML = `
@@ -186,14 +210,14 @@ document.addEventListener('DOMContentLoaded', function() {
         if (userTopics.length === 0) {
             profileTopicsList.innerHTML = '<p class="empty-state">You have not created any topics yet.</p>';
         } else {
-            profileTopicsList.innerHTML = userTopics.map(({ topic, index }) => `
+            profileTopicsList.innerHTML = userTopics.map((topic) => `
                 <div class="profile-item">
                     <h4>${topic.title}</h4>
                     <p>${topic.body}</p>
-                    <small>${topic.type} · posted on ${new Date(topic.timestamp).toLocaleDateString()}</small>
+                    <small>${topic.type} · posted on ${new Date(topic.created_at).toLocaleDateString()}</small>
                     <div class="profile-actions">
-                        <button class="action-button" type="button" onclick="editTopic(${index})">Edit</button>
-                        <button class="action-button danger" type="button" onclick="deleteTopic(${index})">Delete</button>
+                        <button class="action-button" type="button" onclick="editTopic(${topic.id})">Edit</button>
+                        <button class="action-button danger" type="button" onclick="deleteTopic(${topic.id})">Delete</button>
                     </div>
                 </div>
             `).join('');
@@ -202,14 +226,14 @@ document.addEventListener('DOMContentLoaded', function() {
         if (userQuestions.length === 0) {
             profileQuestionsList.innerHTML = '<p class="empty-state">You have not asked any questions yet.</p>';
         } else {
-            profileQuestionsList.innerHTML = userQuestions.map(({ topic, index }) => `
+            profileQuestionsList.innerHTML = userQuestions.map((topic) => `
                 <div class="profile-item">
                     <h4>${topic.title}</h4>
                     <p>${topic.body}</p>
-                    <small>asked on ${new Date(topic.timestamp).toLocaleDateString()}</small>
+                    <small>asked on ${new Date(topic.created_at).toLocaleDateString()}</small>
                     <div class="profile-actions">
-                        <button class="action-button" type="button" onclick="editTopic(${index})">Edit</button>
-                        <button class="action-button danger" type="button" onclick="deleteTopic(${index})">Delete</button>
+                        <button class="action-button" type="button" onclick="editTopic(${topic.id})">Edit</button>
+                        <button class="action-button danger" type="button" onclick="deleteTopic(${topic.id})">Delete</button>
                     </div>
                 </div>
             `).join('');
@@ -410,7 +434,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     <small>Posted by ${topic.author_username} on ${new Date(topic.created_at).toLocaleString()}</small>
                     ${topicActions}
                     <div class="replies">
-                        <p class="reply-count">Replies not implemented yet.</p>
+                        ${topic.replies.length > 0 ? topic.replies.map(reply => `
+                            <div class="reply">
+                                <p>${reply.body}</p>
+                                <small>Replied by ${reply.author_username} on ${new Date(reply.created_at).toLocaleString()}</small>
+                            </div>
+                        `).join('') : '<p class="reply-count">No replies yet.</p>'}
                     </div>
                     <div class="reply-form">
                         <textarea placeholder="${replyPlaceholder}" ${replyDisabled}></textarea>
@@ -458,7 +487,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     <small>Asked by ${topic.author_username} on ${new Date(topic.created_at).toLocaleString()}</small>
                     ${topicActions}
                     <div class="replies">
-                        <p class="reply-count">Answers not implemented yet.</p>
+                        ${topic.replies.length > 0 ? topic.replies.map(reply => `
+                            <div class="reply">
+                                <p>${reply.body}</p>
+                                <small>Answered by ${reply.author_username} on ${new Date(reply.created_at).toLocaleString()}</small>
+                            </div>
+                        `).join('') : '<p class="reply-count">No answers yet.</p>'}
                     </div>
                     <div class="reply-form">
                         <textarea placeholder="${replyPlaceholder}" ${replyDisabled}></textarea>
@@ -586,13 +620,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    window.addReply = function(button, index) {
+    window.addReply = async function(button, topicId) {
         if (!isLoggedIn()) {
             alert('Please login before replying.');
             return;
         }
 
-        const topics = JSON.parse(localStorage.getItem('forumTopics')) || [];
         const replyForm = button.closest('.reply-form');
         if (!replyForm) return;
         const replyTextarea = replyForm.querySelector('textarea');
@@ -601,43 +634,73 @@ document.addEventListener('DOMContentLoaded', function() {
         const replyBody = replyTextarea.value.trim();
         if (!replyBody) return;
 
-        const user = getCurrentUser();
-        topics[index].replies.push({ body: replyBody, author: user.username, timestamp: Date.now() });
-        localStorage.setItem('forumTopics', JSON.stringify(topics));
-        replyTextarea.value = '';
-        loadTopics();
-        loadQuestionTopics();
+        try {
+            await apiRequest(`/api/topics/${topicId}/replies`, {
+                method: 'POST',
+                body: JSON.stringify({ body: replyBody })
+            });
+            replyTextarea.value = '';
+            loadTopics();
+        } catch (error) {
+            console.error('Failed to add reply:', error);
+            alert('Failed to add reply. Please try again.');
+        }
     };
 
-    window.editTopic = function(index) {
-        const topics = JSON.parse(localStorage.getItem('forumTopics')) || [];
-        const topic = topics[index];
+    window.editTopic = async function(topicId) {
         const user = getCurrentUser();
-        if (!topic || !user || topic.author !== user.username) return;
+        if (!user) return;
 
-        const title = window.prompt('Update topic title:', topic.title);
-        if (title === null) return;
-        const body = window.prompt('Update topic body:', topic.body);
-        if (body === null) return;
-        const type = window.prompt('Update topic type (discussion/question):', topic.type) || topic.type;
+        try {
+            // First, get the current topic data
+            const topics = await apiRequest('/api/topics');
+            const topic = topics.find(t => t.id === topicId);
+            if (!topic || topic.author_username !== user.username) return;
 
-        topic.title = title.trim() || topic.title;
-        topic.body = body.trim() || topic.body;
-        topic.type = type === 'question' ? 'question' : 'discussion';
-        localStorage.setItem('forumTopics', JSON.stringify(topics));
-        renderCurrentLists();
+            const title = window.prompt('Update topic title:', topic.title);
+            if (title === null) return;
+            const body = window.prompt('Update topic body:', topic.body);
+            if (body === null) return;
+            const type = window.prompt('Update topic type (discussion/question):', topic.type) || topic.type;
+
+            await apiRequest(`/api/topics/${topicId}`, {
+                method: 'PUT',
+                body: JSON.stringify({
+                    title: title.trim() || topic.title,
+                    body: body.trim() || topic.body,
+                    type: type === 'question' ? 'question' : 'discussion'
+                })
+            });
+
+            loadTopics();
+            loadQuestionTopics();
+        } catch (error) {
+            console.error('Failed to edit topic:', error);
+            alert('Failed to edit topic. Please try again.');
+        }
     };
 
-    window.deleteTopic = function(index) {
-        const topics = JSON.parse(localStorage.getItem('forumTopics')) || [];
-        const topic = topics[index];
+    window.deleteTopic = async function(topicId) {
         const user = getCurrentUser();
-        if (!topic || !user || (topic.author !== user.username && user.role !== 'admin')) return;
-        if (!window.confirm('Delete this topic? This cannot be undone.')) return;
+        if (!user) return;
 
-        topics.splice(index, 1);
-        localStorage.setItem('forumTopics', JSON.stringify(topics));
-        renderCurrentLists();
+        try {
+            // First, get the current topic data
+            const topics = await apiRequest('/api/topics');
+            const topic = topics.find(t => t.id === topicId);
+            if (!topic || (topic.author_username !== user.username && user.role !== 'admin')) return;
+            if (!window.confirm('Delete this topic? This cannot be undone.')) return;
+
+            await apiRequest(`/api/topics/${topicId}`, {
+                method: 'DELETE'
+            });
+
+            loadTopics();
+            loadQuestionTopics();
+        } catch (error) {
+            console.error('Failed to delete topic:', error);
+            alert('Failed to delete topic. Please try again.');
+        }
     };
 
     window.editGalleryItem = function(index) {
