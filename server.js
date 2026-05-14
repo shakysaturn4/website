@@ -119,13 +119,13 @@ app.post('/api/users/register', async (req, res) => {
 // Authenticates user with email and password, returns JWT token
 app.post('/api/users/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
+    const { identifier, password } = req.body;
+    if (!identifier || !password) {
+      return res.status(400).json({ error: 'Username/Email and password are required' });
     }
 
-    // Find user by email
-    const user = users.find(u => u.email === email);
+    // Find user by email or username
+    const user = users.find(u => u.email === identifier || u.username === identifier);
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -318,13 +318,13 @@ app.get('/api/messages', authenticateToken, async (req, res) => {
 
 app.post('/api/messages', authenticateToken, async (req, res) => {
   try {
-    const { content, recipientId } = req.body;
-    if (!content || !recipientId) {
-      return res.status(400).json({ error: 'Content and recipient ID are required' });
+    const { content, recipientUsername } = req.body;
+    if (!content || !recipientUsername) {
+      return res.status(400).json({ error: 'Content and recipient username are required' });
     }
 
     // Check if recipient exists
-    const recipient = users.find(u => u.id === parseInt(recipientId));
+    const recipient = users.find(u => u.username === recipientUsername);
     if (!recipient) {
       return res.status(404).json({ error: 'Recipient not found' });
     }
@@ -333,7 +333,7 @@ app.post('/api/messages', authenticateToken, async (req, res) => {
       id: nextMessageId++,
       content,
       sender_id: req.user.id,
-      recipient_id: parseInt(recipientId),
+      recipient_id: recipient.id,
       created_at: new Date().toISOString()
     };
 
@@ -351,6 +351,6 @@ app.get('*', (req, res) => {
   res.sendFile(__dirname + '/index.html');
 });
 
-app.listen(port, '0.0.0.0', () => {
+app.listen(port, '127.0.0.1', () => {
   console.log(`Server running on port ${port}`);
 });

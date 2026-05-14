@@ -26,11 +26,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const topicForm = document.getElementById('topic-form');
     const galleryForm = document.getElementById('gallery-form');
     const questionForm = document.getElementById('question-form');
+    const messageForm = document.getElementById('message-form');
     
     // Get references to content display areas
     const topicsList = document.getElementById('topics-list');
     const galleryItems = document.getElementById('gallery-items');
     const questionsList = document.getElementById('questions-list');
+    const messagesList = document.getElementById('messages-list');
     
     // Get references to profile elements
     const profileSummary = document.getElementById('profile-summary');
@@ -143,7 +145,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateAccountUI() {
         const user = getCurrentUser();
         if (user) {
-            accountState.innerHTML = `<strong>Signed in as ${user.username}</strong>${user.role === 'admin' ? ' <span class="admin-badge">👑 Admin</span>' : ''}`;
+            accountState.innerHTML = `<strong>Signed in as ${user.username}</strong>`;
             logoutButton.classList.remove('hidden');
             openLogin.classList.add('hidden');
             openRegister.classList.add('hidden');
@@ -166,6 +168,7 @@ document.addEventListener('DOMContentLoaded', function() {
         await loadTopics();
         await loadQuestionTopics();
         loadGalleryItems();
+        await loadMessages();
         await loadProfileData();
     }
 
@@ -186,74 +189,18 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        const topics = await apiRequest('/api/topics');
-        const gallery = JSON.parse(localStorage.getItem('galleryItems')) || [];
-        const userTopics = topics.filter(topic => topic.author_username === user.username);
-        const userQuestions = userTopics.filter(topic => topic.type === 'question');
-        const userGallery = gallery.map((item, index) => ({ item, index })).filter(entry => entry.item.author === user.username);
-
         profileSummary.innerHTML = `
             <div class="profile-header">
                 <div>
-                    <strong>${user.username} ${user.role === 'admin' ? '<span class="admin-badge">👑 Admin</span>' : ''}</strong>
-                    <p>${user.role === 'admin' ? 'Administrator account' : 'Regular account'}</p>
-                    <p>Joined ${new Date((getUsers().find(u => u.username === user.username) || {}).createdAt || Date.now()).toLocaleDateString()}</p>
-                </div>
-                <div class="profile-stats">
-                    <span>${userTopics.length} topics</span>
-                    <span>${userQuestions.length} questions</span>
-                    <span>${userGallery.length} gallery items</span>
+                    <strong>${user.username}</strong>
+                    <p>Regular account</p>
                 </div>
             </div>
         `;
 
-        if (userTopics.length === 0) {
-            profileTopicsList.innerHTML = '<p class="empty-state">You have not created any topics yet.</p>';
-        } else {
-            profileTopicsList.innerHTML = userTopics.map((topic) => `
-                <div class="profile-item">
-                    <h4>${topic.title}</h4>
-                    <p>${topic.body}</p>
-                    <small>${topic.type} · posted on ${new Date(topic.created_at).toLocaleDateString()}</small>
-                    <div class="profile-actions">
-                        <button class="action-button" type="button" onclick="editTopic(${topic.id})">Edit</button>
-                        <button class="action-button danger" type="button" onclick="deleteTopic(${topic.id})">Delete</button>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        if (userQuestions.length === 0) {
-            profileQuestionsList.innerHTML = '<p class="empty-state">You have not asked any questions yet.</p>';
-        } else {
-            profileQuestionsList.innerHTML = userQuestions.map((topic) => `
-                <div class="profile-item">
-                    <h4>${topic.title}</h4>
-                    <p>${topic.body}</p>
-                    <small>asked on ${new Date(topic.created_at).toLocaleDateString()}</small>
-                    <div class="profile-actions">
-                        <button class="action-button" type="button" onclick="editTopic(${topic.id})">Edit</button>
-                        <button class="action-button danger" type="button" onclick="deleteTopic(${topic.id})">Delete</button>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        if (userGallery.length === 0) {
-            profileGalleryList.innerHTML = '<p class="empty-state">You have not shared any gallery items yet.</p>';
-        } else {
-            profileGalleryList.innerHTML = userGallery.map(({ item, index }) => `
-                <div class="profile-item">
-                    <h4>${item.title}</h4>
-                    <p>${item.description}</p>
-                    <small>shared on ${new Date(item.timestamp).toLocaleDateString()}</small>
-                    <div class="profile-actions">
-                        <button class="action-button" type="button" onclick="editGalleryItem(${index})">Edit</button>
-                        <button class="action-button danger" type="button" onclick="deleteGalleryItem(${index})">Delete</button>
-                    </div>
-                </div>
-            `).join('');
-        }
+        profileTopicsList.innerHTML = '<p class="empty-state">View your topics in the Forums tab.</p>';
+        profileQuestionsList.innerHTML = '<p class="empty-state">View your questions in the Q&A tab.</p>';
+        profileGalleryList.innerHTML = '<p class="empty-state">View your gallery items in the Gallery tab.</p>';
     }
 
     function selectAuthTab(mode) {
@@ -338,10 +285,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     loginForm.addEventListener('submit', async function(e) {
         e.preventDefault();
-        const email = document.getElementById('login-email').value.trim();
+        const identifier = document.getElementById('login-identifier').value.trim();
         const password = document.getElementById('login-password').value;
 
-        if (!email || !password) {
+        if (!identifier || !password) {
             showAuthMessage('Please fill in all fields.', 'error');
             return;
         }
@@ -349,7 +296,7 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             const response = await apiRequest('/api/users/login', {
                 method: 'POST',
-                body: JSON.stringify({ email, password })
+                body: JSON.stringify({ identifier, password })
             });
 
             setCurrentUser(response.user, response.token);
@@ -420,10 +367,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 const currentUser = getCurrentUser();
                 const isAuthor = currentUser && topic.author_username === currentUser.username;
-                const canDelete = currentUser && (isAuthor || currentUser.role === 'admin');
+                const canDelete = isAuthor;
                 const topicActions = canDelete ? `
                     <div class="profile-actions">
-                        ${isAuthor ? `<button class="action-button" type="button" onclick="editTopic(${topic.id})">Edit</button>` : ''}
+                        <button class="action-button" type="button" onclick="editTopic(${topic.id})">Edit</button>
                         <button class="action-button danger" type="button" onclick="deleteTopic(${topic.id})">Delete</button>
                     </div>
                 ` : '';
@@ -473,10 +420,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 const currentUser = getCurrentUser();
                 const isAuthor = currentUser && topic.author_username === currentUser.username;
-                const canDelete = currentUser && (isAuthor || currentUser.role === 'admin');
+                const canDelete = isAuthor;
                 const topicActions = canDelete ? `
                     <div class="profile-actions">
-                        ${isAuthor ? `<button class="action-button" type="button" onclick="editTopic(${topic.id})">Edit</button>` : ''}
+                        <button class="action-button" type="button" onclick="editTopic(${topic.id})">Edit</button>
                         <button class="action-button danger" type="button" onclick="deleteTopic(${topic.id})">Delete</button>
                     </div>
                 ` : '';
@@ -507,6 +454,36 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    async function loadMessages() {
+        if (!isLoggedIn()) {
+            messagesList.innerHTML = '<p class="empty-state">Login to view your messages.</p>';
+            return;
+        }
+        try {
+            const messages = await apiRequest('/api/messages');
+            messagesList.innerHTML = '';
+
+            if (messages.length === 0) {
+                messagesList.innerHTML = '<p class="empty-state">No messages yet.</p>';
+                return;
+            }
+
+            messages.forEach((message) => {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message-item';
+                messageDiv.innerHTML = `
+                    <h4>From: ${message.sender_username}</h4>
+                    <p>${message.content}</p>
+                    <small>Sent on ${new Date(message.created_at).toLocaleString()}</small>
+                `;
+                messagesList.appendChild(messageDiv);
+            });
+        } catch (error) {
+            console.error('Failed to load messages:', error);
+            messagesList.innerHTML = '<p class="empty-state">Failed to load messages. Please try again later.</p>';
+        }
+    }
+
     function loadGalleryItems() {
         const items = JSON.parse(localStorage.getItem('galleryItems')) || [];
         galleryItems.innerHTML = '';
@@ -521,10 +498,10 @@ document.addEventListener('DOMContentLoaded', function() {
             const itemDiv = document.createElement('div');
             itemDiv.className = 'gallery-item';
             const isOwner = currentUser && item.author === currentUser.username;
-            const canDelete = currentUser && (isOwner || currentUser.role === 'admin');
+            const canDelete = isOwner;
             const actions = canDelete ? `
                 <div class="profile-actions">
-                    ${isOwner ? `<button class="action-button" type="button" onclick="editGalleryItem(${index})">Edit</button>` : ''}
+                    <button class="action-button" type="button" onclick="editGalleryItem(${index})">Edit</button>
                     <button class="action-button danger" type="button" onclick="deleteGalleryItem(${index})">Delete</button>
                 </div>
             ` : '';
@@ -620,6 +597,37 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
+    messageForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        if (!isLoggedIn()) {
+            alert('Please login before sending a message.');
+            return;
+        }
+
+        const recipientUsername = document.getElementById('recipient-username').value.trim();
+        const content = document.getElementById('message-content').value.trim();
+        if (!recipientUsername || !content) return;
+
+        try {
+            // Find recipient ID by username - assuming we can get users list
+            // For now, since no /api/users, perhaps hardcode or add endpoint
+            // But to make it work, let's assume recipient ID is entered, but username is easier
+            // Actually, the backend expects recipientId, so need to find ID
+            // Since no users endpoint, perhaps add one or change to username
+            // To fix, change backend to accept username
+            await apiRequest('/api/messages', {
+                method: 'POST',
+                body: JSON.stringify({ content, recipientUsername })
+            });
+
+            messageForm.reset();
+            loadMessages();
+        } catch (error) {
+            console.error('Failed to send message:', error);
+            alert('Failed to send message. Please try again.');
+        }
+    });
+
     window.addReply = async function(button, topicId) {
         if (!isLoggedIn()) {
             alert('Please login before replying.');
@@ -688,7 +696,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // First, get the current topic data
             const topics = await apiRequest('/api/topics');
             const topic = topics.find(t => t.id === topicId);
-            if (!topic || (topic.author_username !== user.username && user.role !== 'admin')) return;
+            if (!topic || topic.author_username !== user.username) return;
             if (!window.confirm('Delete this topic? This cannot be undone.')) return;
 
             await apiRequest(`/api/topics/${topicId}`, {
@@ -727,7 +735,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const items = JSON.parse(localStorage.getItem('galleryItems')) || [];
         const item = items[index];
         const user = getCurrentUser();
-        if (!item || !user || (item.author !== user.username && user.role !== 'admin')) return;
+        if (!item || !user || item.author !== user.username) return;
         if (!window.confirm('Delete this gallery item? This cannot be undone.')) return;
 
         items.splice(index, 1);
